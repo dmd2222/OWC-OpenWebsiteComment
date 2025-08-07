@@ -1,31 +1,46 @@
 Kommentar-Overlay und Seiten-Voting System
 
-Dieses Projekt bietet eine einfache Möglichkeit, eine Kommentarfunktion mit Voting (für einzelne Kommentare und Seiten) direkt auf beliebigen Webseiten zu integrieren. Die Benutzer können Kommentare schreiben, bewerten und so die Interaktion auf der Seite verbessern.
+Dieses Projekt bietet eine einfache und flexible Möglichkeit, eine Kommentarfunktion mit Voting (für einzelne Kommentare und ganze Seiten) direkt auf beliebigen Webseiten zu integrieren. Benutzer können Kommentare verfassen, diese bewerten und so die Interaktion und Feedbackkultur auf der Webseite deutlich verbessern.
 Funktionen im Überblick
 
-    Kommentieren mit E-Mail-basierter Nutzer-Identifikation und serverseitigem Proof-of-Work (PoW) gegen Spam
-    Up- und Downvoting von Kommentaren und ganzen Seiten
-    Anzeige von Kommentarzeitpunkt und Hash-Wert als Nachweis
-    Resizables Overlay mit Kommentarübersicht und Eingabemöglichkeit
+    Kommentieren mit E-Mail-basierter Nutzer-Identifikation
+    Sicherstellung der Nutzeridentität durch E-Mail-Verifizierung kombiniert mit serverseitigem Proof-of-Work (PoW) zur effektiven Spam-Abwehr.
+
+    Up- und Downvoting
+    Bewertung sowohl einzelner Kommentare als auch der gesamten Webseite möglich.
+
+    Nachweis durch Zeitstempel und Hash-Wert
+    Jeder Kommentar ist mit einem Zeitpunkt und einem kryptografischen Hash versehen, um Transparenz und Integrität zu gewährleisten.
+
+    Resizables Overlay
+    Flexibles, einblendbares Overlay mit Übersicht aller Kommentare sowie Eingabemöglichkeit.
+
     Benutzerfreundliche Oberfläche via Tampermonkey Userscript
-    Serverseitige API in PHP mit SQLite-Datenbank
+    Leichte Installation und Nutzung direkt über ein Tampermonkey-Skript im Browser.
+
+    Serverseitige API in PHP mit SQLite-Datenbank, später Update auf MySQL
+    Effiziente und leichtgewichtige Backend-Implementierung für Speicherung und Verwaltung.
 
 Technische Details
 
-Die Implementierung basiert auf:
+    Backend: PHP (API-Implementierung)
 
-    PHP für Backend-API und Datenbankzugriff (SQLite)
-    JavaScript mit Tampermonkey für das Frontend-Overlay und Interaktion
-    Proof-of-Work Mechanismus zum Schutz gegen automatisierten Spam
+    Datenbank: SQLite (lokal, dateibasiert)
+
+    Frontend: JavaScript (Tampermonkey Userscript für Overlay und Interaktion)
+
+    Spam-Schutz: Proof-of-Work Mechanismus auf Server-Seite
 
 Installation
 
-Um das Kommentar-Overlay auf Ihrer Webseite zu nutzen, installieren Sie das Tampermonkey-Skript in Ihrem Browser. Es wird über eine zentrale URL ausgeliefert und aktualisiert.
+    Installieren Sie Tampermonkey in Ihrem Browser.
 
+    Fügen Sie das Tampermonkey-Skript über die zentrale URL hinzu, die das Overlay lädt und automatisch aktualisiert.
 
+    Das Overlay erscheint auf der gewünschten Webseite und kann beliebig genutzt werden.
 
 Quellcode & Weiterentwicklung
 
-Der Quellcode des Projekts wird derzeit nicht öffentlich bereitgestellt, da er noch in der Entwicklung ist. Bei Interesse an einer Zusammenarbeit oder Fragen können Sie gerne Kontakt aufnehmen.
+Der Quellcode dieses Projekts ist aktuell nicht öffentlich verfügbar, da sich das System noch in aktiver Entwicklung befindet. Bei Interesse an einer Zusammenarbeit, Feedback oder Fragen können Sie gerne Kontakt aufnehmen. Eine Veröffentlichung ist jedoch angedacht.
 
-© 2025 Marco Schwald. Alle Rechte vorbehalten.
+© 2025 Marco Schwald – Alle Rechte vorbehalten.
