@@ -18,6 +18,8 @@
     const apiBase = "https://marcoschwald.de/Develop/website_comment/";
     const pageUrl = encodeURIComponent(location.href);
     const localKeyEmail = "comment_overlay_email";
+    const localKeyPassword = "comment_overlay_password";
+
 
     // --- Debug UI Code hier (wie vorher) ---
 
@@ -342,8 +344,25 @@ async function getEmail() {
         };
     }
 
+  async function hashPassword(password) {
+    return await sha256(password);
+}
+
+
+
 async function main() {
     const email = await getEmail();
+    let password = await GM_getValue(localKeyPassword, null);
+    if (!password) {
+        // Noch kein Passwort gespeichert, Registrierung starten
+        await doRegister(email);
+        password = await GM_getValue(localKeyPassword, null);
+        if (!password) {
+            alert('Registrierung nicht abgeschlossen, kein Passwort gefunden.');
+            return;
+        }
+    }
+
     if (!email) {
         alert('Ohne gültige E-Mail kannst du keine Kommentare posten oder voten.');
         return;
@@ -421,9 +440,9 @@ async function main() {
             });
         }
 
-        async function doRegister() {
+        async function doRegister(email) {
             try {
-                const challengeData = await getPoWChallenge();
+                const challengeData = await getPoWChallenge(email);
                 const { powNonce } = await generatePoW(challengeData.challenge, challengeData.difficulty);
 
                 apiRequest('POST', 'register', {
@@ -431,14 +450,21 @@ async function main() {
                     powNonce,
                     powChallenge: challengeData.challenge,
                     powDifficulty: challengeData.difficulty
-                }, (res) => {
+                }, async (res) => {
                     if (res.status === 200) {
                         try {
                             const data = JSON.parse(res.responseText);
                             if (data.status === "already_confirmed") {
                                 console.log("User ist bereits bestätigt, keine Registrierung nötig.");
                             } else if (data.status === "confirmation_sent") {
-                                alert('Registrierung abgeschlossen. Bitte bestätige deine E-Mail und lade die Seite neu.');
+                                alert('Registrierung abgeschlossen. Bitte bestätige deine E-Mail und lade die Seite neu.\n' + JSON.stringify(data, null, 2));
+
+                                if (data.your_secret_password) {
+                                    await GM_setValue(localKeyPassword, data.your_secret_password);
+                                    console.log('Passwort gespeichert');
+                                } else {
+                                    alert('Kein Passwort vom Server erhalten');
+                                }
                             } else if (data.status === "confirmation_resent") {
                                 alert('Bestätigungsmail wurde erneut gesendet.');
                             } else {
@@ -456,13 +482,19 @@ async function main() {
             }
         }
 
-        async function postComment(comment) {
+        async function postComment(email,comment) {
             try {
-                const challengeData = await getPoWChallenge();
+
+                const passwordPlain = await GM_getValue(localKeyPassword, null);
+                const password = await sha256(passwordPlain);
+
+
+                const challengeData = await getPoWChallenge(email);
                 const { powNonce } = await generatePoW(challengeData.challenge, challengeData.difficulty);
 
                 apiRequest('POST', 'comment', {
                     email,
+                    hashed_password: password,
                     page: decodeURIComponent(pageUrl),
                     comment,
                     powNonce,
@@ -473,7 +505,7 @@ async function main() {
                         input.value = '';
                         refreshComments();
                     } else {
-                        alert('Kommentar konnte nicht gesendet werden.');
+                            alert('Kommentar konnte nicht gesendet werden. Server-Antwort: ' + res.status + ' ' + res.responseText);
                     }
                 });
             } catch (e) {
@@ -481,13 +513,17 @@ async function main() {
             }
         }
 
-        async function sendPageVote(vote) {
+        async function sendPageVote(email,vote) {
             try {
-                const challengeData = await getPoWChallenge();
+                const passwordPlain = await GM_getValue(localKeyPassword, null);
+                const password = await sha256(passwordPlain);
+
+                const challengeData = await getPoWChallenge(email);
                 const { powNonce } = await generatePoW(challengeData.challenge, challengeData.difficulty);
 
                 apiRequest('POST', 'page_vote', {
                     email,
+                    hashed_password: password,
                     page: decodeURIComponent(pageUrl),
                     vote,
                     powNonce,
@@ -505,36 +541,38 @@ async function main() {
             }
         }
 
-        doRegister();
+        doRegister(email);
 
-        btnSend.addEventListener('click', () => {
-            const commentText = input.value.trim();
-            if (!commentText) return alert('Kommentar darf nicht leer sein.');
-            postComment(commentText);
-        });
+btnSend.addEventListener('click', () => {
+    const commentText = input.value.trim();
+    if (!commentText) return alert('Kommentar darf nicht leer sein.');
+    postComment(email,commentText);
+});
 
-        btnGlobalUp.addEventListener('click', () => sendPageVote(1));
-        btnGlobalDown.addEventListener('click', () => sendPageVote(-1));
+btnGlobalUp.addEventListener('click', () => sendPageVote(email,1));
+btnGlobalDown.addEventListener('click', () => sendPageVote(email,-1));
+
 
         refreshComments();
     }
 
-    async function getPoWChallenge() {
-        return new Promise((resolve, reject) => {
-            apiRequest('GET', 'powchallenge', null, (res) => {
-                if (res.status === 200) {
-                    try {
-                        const data = JSON.parse(res.responseText);
-                        resolve(data);
-                    } catch (e) {
-                        reject(e);
-                    }
-                } else {
-                    reject(new Error('Failed to get PoW challenge'));
+async function getPoWChallenge(email) {
+    return new Promise((resolve, reject) => {
+        apiRequest('POST', 'powchallenge', { email }, (res) => {
+            if (res.status === 200) {
+                try {
+                    const data = JSON.parse(res.responseText);
+                    resolve(data);
+                } catch (e) {
+                    reject(e);
                 }
-            });
+            } else {
+                reject(new Error('Failed to get PoW challenge (' + res.status + ')'));
+            }
         });
-    }
+    });
+}
+
 
     main().catch(console.error);
 
