@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kommentar-Overlay mit globalem Seiten-Voting + Debugging
 // @namespace    http://your-namespace.example
-// @version      1.6
+// @version      1.7
 // @description  Kommentieren & Voten (Seite + Kommentare) mit Server-PoW, resizable overlay, Debug-Tab
 // @match        *://*/*
 // @grant        GM_xmlhttpRequest
@@ -91,23 +91,23 @@
 
     const { panel: debugPanel, content: debugContent } = createDebugPanel();
 
-async function getEmail() {
-    let email = await GM_getValue('comment_overlay_email', null);
-    const isValidEmail = (e) => /\S+@\S+\.\S+/.test(e);
+    async function getEmail() {
+        let email = await GM_getValue(localKeyEmail, null);
+        const isValidEmail = (e) => /\S+@\S+\.\S+/.test(e);
 
-    while (!email || !isValidEmail(email)) {
-        email = prompt("Bitte gib deine gültige E-Mail-Adresse ein für Kommentare und Voting:");
-        if (email === null) break;  // Abbrechen
+        while (!email || !isValidEmail(email)) {
+            email = prompt("Bitte gib deine gültige E-Mail-Adresse ein für Kommentare und Voting:");
+            if (email === null) break;  // Abbrechen
 
-        if (isValidEmail(email)) {
-            await GM_setValue('comment_overlay_email', email);
-        } else {
-            alert('Bitte gib eine gültige E-Mail-Adresse ein.');
-            email = null; // damit loop weiter läuft
+            if (isValidEmail(email)) {
+                await GM_setValue(localKeyEmail, email);
+            } else {
+                alert('Bitte gib eine gültige E-Mail-Adresse ein.');
+                email = null; // damit loop weiter läuft
+            }
         }
+        return email;
     }
-    return email;
-}
 
 
     function sha256(str) {
@@ -182,10 +182,10 @@ async function getEmail() {
                 resize: vertical;
             }
             .comment-meta {
-    font-size: 10px;
-    color: #aaa;
-    margin-left: 6px;
-}
+                font-size: 10px;
+                color: #aaa;
+                margin-left: 6px;
+            }
 
             #comment-overlay > .top-row {
                 display: flex;
@@ -261,11 +261,48 @@ async function getEmail() {
                 padding: 2px 0;
                 border-bottom: 1px solid #333;
             }
+            #settings-panel {
+                position: absolute;
+                top: 30px;
+                right: 10px;
+                background-color: rgba(0,0,0,0.9);
+                color: white;
+                padding: 10px;
+                border-radius: 6px;
+                box-shadow: 0 0 10px black;
+                z-index: 100000;
+                display: none;
+                width: 250px;
+                font-size: 14px;
+                user-select: none;
+            }
+            #settings-panel input {
+                background-color: #222;
+                border: 1px solid #555;
+                color: white;
+                padding: 6px 8px;
+                border-radius: 4px;
+            }
+            #settings-panel button {
+                background-color: #444;
+                border: none;
+                color: white;
+                padding: 8px;
+                width: 100%;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: bold;
+                margin-top: 6px;
+            }
+            #settings-panel button:hover {
+                background-color: #666;
+            }
         `;
         document.head.appendChild(style);
 
         const container = document.createElement('div');
         container.id = 'comment-overlay';
+        container.style.position = 'relative';
 
         // Globale Votes (Seite)
         const globalVotes = document.createElement('div');
@@ -298,6 +335,21 @@ async function getEmail() {
         const topRow = document.createElement('div');
         topRow.className = 'top-row';
 
+        // Zahnrad-Button rechts oben
+        const settingsBtn = document.createElement('button');
+        settingsBtn.id = 'btnSettings';
+        settingsBtn.title = 'Einstellungen';
+        settingsBtn.textContent = '⚙️';
+        settingsBtn.style.marginLeft = 'auto';
+        settingsBtn.style.fontSize = '18px';
+        settingsBtn.style.background = 'transparent';
+        settingsBtn.style.border = 'none';
+        settingsBtn.style.color = 'white';
+        settingsBtn.style.cursor = 'pointer';
+        settingsBtn.style.flexShrink = '0';
+
+        topRow.appendChild(settingsBtn);
+
         const input = document.createElement('input');
         input.id = 'comment-input';
         input.type = 'text';
@@ -311,9 +363,6 @@ async function getEmail() {
         scoreDisplay.id = 'score-display';
         scoreDisplay.textContent = '👍 0';
 
-        // Daumen für Kommentar Up/Down (aktuell vereinfacht: global für Seite, für einzelne Kommentare kannst du noch erweitern)
-        // Hier aus Vereinfachung nur globale Votes und Kommentarliste.
-
         topRow.appendChild(scoreDisplay);
         topRow.appendChild(input);
         topRow.appendChild(btnSend);
@@ -323,11 +372,14 @@ async function getEmail() {
         commentList.id = 'comment-list';
         commentList.textContent = 'Lade Kommentare...';
 
+        // Settings Panel erstellen und anhängen
+        const settingsPanel = createSettingsPanel();
+        container.appendChild(settingsPanel);
+
         container.appendChild(globalVotes);
         container.appendChild(topRow);
         container.appendChild(commentList);
 
-       // document.body.style.marginTop = '120px';
         document.body.prepend(container);
 
         return {
@@ -340,33 +392,49 @@ async function getEmail() {
             scoreDisplay,
             input,
             btnSend,
-            commentList
+            commentList,
+            settingsBtn,
+            settingsPanel
         };
     }
 
-  async function hashPassword(password) {
-    return await sha256(password);
-}
+    // Funktion: Einstellungs-Panel erstellen
+    function createSettingsPanel() {
+        const panel = document.createElement('div');
+        panel.id = 'settings-panel';
 
+        panel.innerHTML = `
+            <label for="emailInput">E-Mail:</label><br>
+            <input type="email" id="emailInput" style="width: 100%; margin-bottom: 8px;" placeholder="E-Mail eingeben"><br>
+            <label for="passwordInput">Passwort:</label><br>
+            <input type="password" id="passwordInput" style="width: 100%; margin-bottom: 8px;" placeholder="Passwort eingeben"><br>
+            <button id="saveSettingsBtn">Speichern</button>
+        `;
 
+        return panel;
+    }
 
-async function main() {
-    const email = await getEmail();
-    let password = await GM_getValue(localKeyPassword, null);
-    if (!password) {
-        // Noch kein Passwort gespeichert, Registrierung starten
-        await doRegister(email);
-        password = await GM_getValue(localKeyPassword, null);
+    async function hashPassword(password) {
+        return await sha256(password);
+    }
+
+    async function main() {
+        const email = await getEmail();
+        let password = await GM_getValue(localKeyPassword, null);
         if (!password) {
-            alert('Registrierung nicht abgeschlossen, kein Passwort gefunden.');
+            // Noch kein Passwort gespeichert, Registrierung starten
+            await doRegister(email);
+            password = await GM_getValue(localKeyPassword, null);
+            if (!password) {
+                alert('Registrierung nicht abgeschlossen, kein Passwort gefunden.');
+                return;
+            }
+        }
+
+        if (!email) {
+            alert('Ohne gültige E-Mail kannst du keine Kommentare posten oder voten.');
             return;
         }
-    }
-
-    if (!email) {
-        alert('Ohne gültige E-Mail kannst du keine Kommentare posten oder voten.');
-        return;
-    }
 
         const {
             container,
@@ -378,8 +446,48 @@ async function main() {
             scoreDisplay,
             input,
             btnSend,
-            commentList
+            commentList,
+            settingsBtn,
+            settingsPanel
         } = createOverlay();
+
+        // Einstellungen-Panel ein-/ausblenden beim Klick auf Zahnrad
+        settingsBtn.addEventListener('click', async () => {
+            if (settingsPanel.style.display === 'block') {
+                settingsPanel.style.display = 'none';
+            } else {
+                settingsPanel.style.display = 'block';
+
+                // Vorbefüllen mit gespeicherten Werten
+                const savedEmail = await GM_getValue(localKeyEmail, '');
+                const savedPassword = await GM_getValue(localKeyPassword, '');
+
+                settingsPanel.querySelector('#emailInput').value = savedEmail || '';
+                settingsPanel.querySelector('#passwordInput').value = savedPassword || '';
+            }
+        });
+
+        // Speichern-Button im Einstellungs-Panel
+        settingsPanel.querySelector('#saveSettingsBtn').addEventListener('click', async () => {
+            const newEmail = settingsPanel.querySelector('#emailInput').value.trim();
+            const newPassword = settingsPanel.querySelector('#passwordInput').value.trim();
+
+            const isValidEmail = e => /\S+@\S+\.\S+/.test(e);
+            if (!isValidEmail(newEmail)) {
+                alert('Bitte eine gültige E-Mail-Adresse eingeben.');
+                return;
+            }
+            if (!newPassword) {
+                alert('Bitte ein Passwort eingeben.');
+                return;
+            }
+
+            await GM_setValue(localKeyEmail, newEmail);
+            await GM_setValue(localKeyPassword, newPassword);
+
+            alert('Einstellungen gespeichert. Bitte lade die Seite neu, damit sie wirksam werden.');
+            settingsPanel.style.display = 'none';
+        });
 
         async function refreshComments() {
             apiRequest('GET', `fetch?page=${pageUrl}&email=${encodeURIComponent(email)}`, null, (res) => {
@@ -397,18 +505,9 @@ async function main() {
                     const pageScore = data.pageScore || 0;
                     const myPageVote = data.myPageVote || 0;
 
-                    // globalUpCount / globalDownCount anhand pageScore (sehr einfache Zählung)
-                    // Wir brauchen Up und Down separat:
-                    // Annahme: pageScore = Up - Down
-                    // Aber wir haben nur Summe in DB, keine getrennten Werte.
-                    // Daher: Wir brauchen eine neue API oder Anpassung, um Up/Down getrennt zu liefern.
-                    // Zur schnellen Umsetzung: Wir zeigen pageScore als Differenz und eigene Wertung als Farbe.
-
-                    // Wenn pageScore positiv, alle als Up-Count, sonst 0
                     globalUpCount.textContent = pageScore > 0 ? pageScore : 0;
                     globalDownCount.textContent = pageScore < 0 ? -pageScore : 0;
 
-                    // Button-Styles für eigene Wertung
                     btnGlobalUp.classList.toggle('active', myPageVote === 1);
                     btnGlobalDown.classList.toggle('active', myPageVote === -1);
 
@@ -417,22 +516,21 @@ async function main() {
                     if (data.comments.length === 0) {
                         commentList.textContent = 'Keine Kommentare';
                     } else {
-                       for (const c of data.comments) {
-    const div = document.createElement('div');
+                        for (const c of data.comments) {
+                            const div = document.createElement('div');
 
-    const commentText = document.createElement('span');
-    commentText.textContent = `• ${c.comment}`;
+                            const commentText = document.createElement('span');
+                            commentText.textContent = `• ${c.comment}`;
 
-    const meta = document.createElement('span');
-    meta.className = 'comment-meta';
-    const date = new Date(c.created_at).toLocaleString(); // formatiertes Datum
-    meta.textContent = ` (${date} • ${c.hash.slice(0, 8)}…)`;
+                            const meta = document.createElement('span');
+                            meta.className = 'comment-meta';
+                            const date = new Date(c.created_at).toLocaleString();
+                            meta.textContent = ` (${date} • ${c.hash.slice(0, 8)}…)`;
 
-    div.appendChild(commentText);
-    div.appendChild(meta);
-    commentList.appendChild(div);
-}
-
+                            div.appendChild(commentText);
+                            div.appendChild(meta);
+                            commentList.appendChild(div);
+                        }
                     }
                 } catch {
                     commentList.textContent = 'Fehler beim Laden der Kommentare';
@@ -452,128 +550,103 @@ async function main() {
                     powDifficulty: challengeData.difficulty
                 }, async (res) => {
                     if (res.status === 200) {
-                        try {
-                            const data = JSON.parse(res.responseText);
-                            if (data.status === "already_confirmed") {
-                                console.log("User ist bereits bestätigt, keine Registrierung nötig.");
-                            } else if (data.status === "confirmation_sent") {
-                                alert('Registrierung abgeschlossen. Bitte bestätige deine E-Mail und lade die Seite neu.\n' + JSON.stringify(data, null, 2));
-
-                                if (data.your_secret_password) {
-                                    await GM_setValue(localKeyPassword, data.your_secret_password);
-                                    console.log('Passwort gespeichert');
-                                } else {
-                                    alert('Kein Passwort vom Server erhalten');
-                                }
-                            } else if (data.status === "confirmation_resent") {
-                                alert('Bestätigungsmail wurde erneut gesendet.');
-                            } else {
-                                alert('Unbekannte Serverantwort: ' + res.responseText);
-                            }
-                        } catch(e) {
-                            alert('Fehler beim Verarbeiten der Serverantwort.');
+                        const data = JSON.parse(res.responseText);
+                        if (data.passwordHash) {
+                            await GM_setValue(localKeyPassword, data.passwordHash);
+                            alert('Registrierung erfolgreich, Passwort gespeichert.');
+                        } else {
+                            alert('Registrierung fehlgeschlagen: Passwort nicht erhalten.');
                         }
                     } else {
-                        alert('Registrierung fehlgeschlagen.');
+                        alert('Registrierung fehlgeschlagen, Server antwortete mit ' + res.status);
                     }
                 });
             } catch (e) {
-                alert('Fehler beim PoW oder Registrierung: ' + e.message);
+                alert('Registrierung fehlgeschlagen: ' + e.message);
             }
         }
 
-        async function postComment(email,comment) {
-            try {
-
-                const passwordPlain = await GM_getValue(localKeyPassword, null);
-                const password = await sha256(passwordPlain);
-
-
-                const challengeData = await getPoWChallenge(email);
-                const { powNonce } = await generatePoW(challengeData.challenge, challengeData.difficulty);
-
-                apiRequest('POST', 'comment', {
-                    email,
-                    hashed_password: password,
-                    page: decodeURIComponent(pageUrl),
-                    comment,
-                    powNonce,
-                    powChallenge: challengeData.challenge,
-                    powDifficulty: challengeData.difficulty
-                }, (res) => {
-                    if (res.status === 200) {
-                        input.value = '';
-                        refreshComments();
-                    } else {
-                            alert('Kommentar konnte nicht gesendet werden. Server-Antwort: ' + res.status + ' ' + res.responseText);
+        async function getPoWChallenge(email) {
+            return new Promise((resolve, reject) => {
+                apiRequest('GET', `pow_challenge?email=${encodeURIComponent(email)}`, null, (res) => {
+                    if (res.status !== 200) {
+                        reject(new Error('Fehler beim PoW Challenge Abruf'));
+                        return;
+                    }
+                    try {
+                        const data = JSON.parse(res.responseText);
+                        resolve(data);
+                    } catch {
+                        reject(new Error('Ungültige Antwort beim PoW Challenge Abruf'));
                     }
                 });
-            } catch (e) {
-                alert('Fehler beim PoW oder Kommentar senden: ' + e.message);
-            }
+            });
         }
 
-        async function sendPageVote(email,vote) {
-            try {
-                const passwordPlain = await GM_getValue(localKeyPassword, null);
-                const password = await sha256(passwordPlain);
+        btnGlobalUp.addEventListener('click', async () => {
+            await sendVote(1);
+        });
 
-                const challengeData = await getPoWChallenge(email);
-                const { powNonce } = await generatePoW(challengeData.challenge, challengeData.difficulty);
+        btnGlobalDown.addEventListener('click', async () => {
+            await sendVote(-1);
+        });
 
-                apiRequest('POST', 'page_vote', {
-                    email,
-                    hashed_password: password,
-                    page: decodeURIComponent(pageUrl),
-                    vote,
-                    powNonce,
-                    powChallenge: challengeData.challenge,
-                    powDifficulty: challengeData.difficulty
-                }, (res) => {
-                    if (res.status === 200) {
-                        refreshComments();
-                    } else {
-                        alert('Seiten-Vote fehlgeschlagen.');
-                    }
-                });
-            } catch (e) {
-                alert('Fehler beim PoW oder Seiten-Vote senden: ' + e.message);
-            }
+        async function sendVote(vote) {
+            const challengeData = await getPoWChallenge(email);
+            const { powNonce } = await generatePoW(challengeData.challenge, challengeData.difficulty);
+
+            const pass = await GM_getValue(localKeyPassword);
+
+            const body = {
+                email,
+                passwordHash: pass,
+                vote,
+                powNonce,
+                powChallenge: challengeData.challenge,
+                powDifficulty: challengeData.difficulty,
+                pageUrl
+            };
+            apiRequest('POST', 'vote', body, (res) => {
+                if (res.status === 200) {
+                    refreshComments();
+                } else {
+                    alert('Fehler beim Abstimmen');
+                }
+            });
         }
 
-        doRegister(email);
+        btnSend.addEventListener('click', async () => {
+            const comment = input.value.trim();
+            if (!comment) return;
 
-btnSend.addEventListener('click', () => {
-    const commentText = input.value.trim();
-    if (!commentText) return alert('Kommentar darf nicht leer sein.');
-    postComment(email,commentText);
-});
+            const challengeData = await getPoWChallenge(email);
+            const { powNonce } = await generatePoW(challengeData.challenge, challengeData.difficulty);
 
-btnGlobalUp.addEventListener('click', () => sendPageVote(email,1));
-btnGlobalDown.addEventListener('click', () => sendPageVote(email,-1));
+            const pass = await GM_getValue(localKeyPassword);
 
+            const body = {
+                email,
+                passwordHash: pass,
+                comment,
+                powNonce,
+                powChallenge: challengeData.challenge,
+                powDifficulty: challengeData.difficulty,
+                pageUrl
+            };
+
+            apiRequest('POST', 'comment', body, (res) => {
+                if (res.status === 200) {
+                    input.value = '';
+                    refreshComments();
+                } else {
+                    alert('Fehler beim Senden des Kommentars');
+                }
+            });
+        });
 
         refreshComments();
     }
 
-async function getPoWChallenge(email) {
-    return new Promise((resolve, reject) => {
-        apiRequest('POST', 'powchallenge', { email }, (res) => {
-            if (res.status === 200) {
-                try {
-                    const data = JSON.parse(res.responseText);
-                    resolve(data);
-                } catch (e) {
-                    reject(e);
-                }
-            } else {
-                reject(new Error('Failed to get PoW challenge (' + res.status + ')'));
-            }
-        });
-    });
-}
-
-
-    main().catch(console.error);
+    main();
 
 })();
